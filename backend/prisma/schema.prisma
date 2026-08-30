@@ -1,0 +1,207 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum ProblemDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum ProblemStatus {
+  NOT_STARTED
+  ATTEMPTED
+  SOLVED
+}
+
+// USER
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(USER)
+  avatar    String?
+  refreshToken String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  problemProgress UserProblemProgress[]
+  bookmarks       Bookmark[]
+  lessonProgress  LessonProgress[]
+}
+
+// DSA
+
+model Topic {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  problems Problem[]
+}
+
+
+model Company {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  problems Problem[]
+}
+
+
+model Problem {
+  id           String            @id @default(cuid())
+  title        String
+  slug         String            @unique
+  description  String
+  difficulty   ProblemDifficulty
+  constraints  String?
+  examples     Json?
+  solution     String?
+  videoUrl     String?
+  externalUrl  String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  topicId      String
+  topic        Topic             @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  companies   Company[]
+  progress    UserProblemProgress[]
+  bookmarks   Bookmark[]
+
+  @@index([topicId])
+  @@index([difficulty])
+}
+
+// USER DSA PROGRESS
+
+model UserProblemProgress {
+  id        String        @id @default(cuid())
+  status    ProblemStatus @default(NOT_STARTED)
+  solvedAt  DateTime?
+
+  userId    String
+  problemId String
+
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem   Problem       @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([userId, problemId])
+  @@index([userId])
+  @@index([problemId])
+}
+
+// BOOKMARKS
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  problemId String
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem   Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, problemId])
+  @@index([userId])
+  @@index([problemId])
+}
+
+// LEARNING SYSTEM
+
+model Course {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  description String?
+  thumbnail   String?
+  published   Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  modules     Module[]
+}
+
+model Module {
+  id        String   @id @default(cuid())
+  title     String
+  order     Int
+
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  lessons   Lesson[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courseId])
+}
+
+
+model Lesson {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String
+  content     String?
+  videoUrl    String?
+  resources   Json?
+  order       Int
+
+  moduleId    String
+  module      Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  progress    LessonProgress[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([moduleId, slug])
+  @@index([moduleId])
+}
+
+// LESSON PROGRESS
+
+model LessonProgress {
+  id          String   @id @default(cuid())
+  completed   Boolean  @default(false)
+  completedAt DateTime?
+
+  userId      String
+  lessonId    String
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+  @@index([lessonId])
+}
+
+
