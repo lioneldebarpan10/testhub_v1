@@ -42,29 +42,66 @@ model User {
   lessonProgress  LessonProgress[]
 }
 
-// DSA
+// DSA - SHEETS & TOPICS
+
+model Sheet {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  published   Boolean   @default(false)
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  topics      Topic[]
+}
 
 model Topic {
   id        String    @id @default(cuid())
-  name      String    @unique
-  slug      String    @unique
+  name      String
+  slug      String
+  description String?
+  order     Int       @default(0)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  problems Problem[]
+  sheetId   String?
+  sheet     Sheet?    @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+
+  modules   DsaModule[]
+  problems  Problem[]
+
+  @@unique([sheetId, slug])
+  @@index([sheetId])
 }
 
+model DsaModule {
+  id        String    @id @default(cuid())
+  title     String
+  order     Int       @default(0)
+  description String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  topicId   String
+  topic     Topic     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  problems  Problem[]
+
+  @@index([topicId])
+}
 
 model Company {
   id        String    @id @default(cuid())
   name      String    @unique
   slug      String    @unique
+  logo      String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  problems Problem[]
+  problemCompanies ProblemCompany[]
 }
-
 
 model Problem {
   id           String            @id @default(cuid())
@@ -77,18 +114,61 @@ model Problem {
   solution     String?
   videoUrl     String?
   externalUrl  String?
+  revision     Boolean           @default(false)
+  order        Int               @default(0)
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 
   topicId      String
   topic        Topic             @relation(fields: [topicId], references: [id], onDelete: Cascade)
 
-  companies   Company[]
+  dsaModuleId  String?
+  dsaModule    DsaModule?        @relation(fields: [dsaModuleId], references: [id], onDelete: SetNull)
+
+  companies   ProblemCompany[]
+  article     ProblemArticle?
   progress    UserProblemProgress[]
   bookmarks   Bookmark[]
 
   @@index([topicId])
   @@index([difficulty])
+  @@index([dsaModuleId])
+}
+
+model ProblemCompany {
+  id        String   @id @default(cuid())
+  problemId String
+  companyId String
+
+  problem   Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([problemId, companyId])
+  @@index([problemId])
+  @@index([companyId])
+}
+
+model ProblemArticle {
+  id          String   @id @default(cuid())
+  problemId   String   @unique
+  problem     Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  statement   String?
+  examples    String?
+  bruteForce  String?
+  betterApproach String?
+  optimalApproach String?
+  algorithm   String?
+  code        String?
+  complexity  String?
+  videoUrl    String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([problemId])
 }
 
 // USER DSA PROGRESS

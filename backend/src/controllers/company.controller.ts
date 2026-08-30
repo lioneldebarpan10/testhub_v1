@@ -1,10 +1,16 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import prisma from "../config/prisma.js";
 import { createSlug } from "../utils/slug.js";
+import { AppError } from "../utils/AppError.js";
+
+// ====================
+// GET ALL COMPANIES
+// ====================
 
 export const getAllCompanies = async (
    req: Request,
-   res: Response
+   res: Response,
+   next: NextFunction
 ) => {
    try {
       const companies = await prisma.company.findMany({
@@ -25,27 +31,28 @@ export const getAllCompanies = async (
          data: companies,
       });
    } catch (error) {
-      console.error(error);
-
-      return res.status(500).json({
-         success: false,
-         message: "Failed to fetch companies",
-      });
+      next(error);
    }
 };
 
+// ====================
+// CREATE COMPANY
+// ====================
+
 export const createCompany = async (
    req: Request,
-   res: Response
+   res: Response,
+   next: NextFunction
 ) => {
    try {
-      const { name } = req.body;
+      const { name } = req.body ?? {};
 
-      if (!name || !name.trim()) {
-         return res.status(400).json({
-            success: false,
-            message: "Company name is required",
-         });
+      if (
+         !name ||
+         typeof name !== "string" ||
+         !name.trim()
+      ) {
+         throw new AppError("Company name is required", 400);
       }
 
       const cleanName = name.trim();
@@ -61,10 +68,7 @@ export const createCompany = async (
       });
 
       if (existingCompany) {
-         return res.status(409).json({
-            success: false,
-            message: "Company already exists",
-         });
+         throw new AppError("Company already exists", 409);
       }
 
       const company = await prisma.company.create({
@@ -80,28 +84,25 @@ export const createCompany = async (
          data: company,
       });
    } catch (error) {
-      console.error(error);
-
-      return res.status(500).json({
-         success: false,
-         message: "Failed to create company",
-      });
+      next(error);
    }
 };
 
+// ====================
+// GET COMPANY BY SLUG
+// ====================
+
 export const getCompanyBySlug = async (
    req: Request,
-   res: Response
+   res: Response,
+   next: NextFunction
 ) => {
    try {
       const { slug } = req.params;
-      if (typeof slug !== "string") {
-         return res.status(400).json({
-            success: false,
-            message: "Invalid topic slug",
-         });
-      }
 
+      if (typeof slug !== "string") {
+         throw new AppError("Invalid company slug", 400);
+      }
 
       const company = await prisma.company.findUnique({
          where: {
@@ -117,10 +118,7 @@ export const getCompanyBySlug = async (
       });
 
       if (!company) {
-         return res.status(404).json({
-            success: false,
-            message: "Company not found",
-         });
+         throw new AppError("Company not found", 404);
       }
 
       return res.status(200).json({
@@ -128,40 +126,39 @@ export const getCompanyBySlug = async (
          data: company,
       });
    } catch (error) {
-      console.error(error);
-
-      return res.status(500).json({
-         success: false,
-         message: "Failed to fetch company",
-      });
+      next(error);
    }
 };
 
+// ====================
+// UPDATE COMPANY
+// ====================
+
 export const updateCompany = async (
    req: Request,
-   res: Response
+   res: Response,
+   next: NextFunction
 ) => {
    try {
       const { id } = req.params;
-      const { name } = req.body;
+      const { name } = req.body ?? {};
 
       if (typeof id !== "string") {
-         return res.status(400).json({
-            success: false,
-            message: "Invalid topic id",
-         });
+         throw new AppError("Invalid company id", 400);
       }
 
-      if (!name || !name.trim()) {
-         return res.status(400).json({
-            success: false,
-            message: "Company name is required",
-         });
+      if (
+         !name ||
+         typeof name !== "string" ||
+         !name.trim()
+      ) {
+         throw new AppError("Company name is required", 400);
       }
 
       const cleanName = name.trim();
       const slug = createSlug(cleanName);
 
+      // Check if another company already has this name or slug
       const existingCompany = await prisma.company.findFirst({
          where: {
             OR: [
@@ -175,10 +172,10 @@ export const updateCompany = async (
       });
 
       if (existingCompany) {
-         return res.status(409).json({
-            success: false,
-            message: "Another company with this name already exists",
-         });
+         throw new AppError(
+            "Another company with this name already exists",
+            409
+         );
       }
 
       const company = await prisma.company.update({
@@ -197,27 +194,34 @@ export const updateCompany = async (
          data: company,
       });
    } catch (error) {
-      console.error(error);
-
-      return res.status(500).json({
-         success: false,
-         message: "Failed to update company",
-      });
+      next(error);
    }
 };
 
+// ====================
+// DELETE COMPANY
+// ====================
+
 export const deleteCompany = async (
    req: Request,
-   res: Response
+   res: Response,
+   next: NextFunction
 ) => {
    try {
       const { id } = req.params;
-      
+
       if (typeof id !== "string") {
-         return res.status(400).json({
-            success: false,
-            message: "Invalid topic id",
-         });
+         throw new AppError("Invalid company id", 400);
+      }
+
+      const existingCompany = await prisma.company.findUnique({
+         where: {
+            id,
+         },
+      });
+
+      if (!existingCompany) {
+         throw new AppError("Company not found", 404);
       }
 
       await prisma.company.delete({
@@ -231,11 +235,6 @@ export const deleteCompany = async (
          message: "Company deleted successfully",
       });
    } catch (error) {
-      console.error(error);
-
-      return res.status(500).json({
-         success: false,
-         message: "Failed to delete company",
-      });
+      next(error);
    }
 };

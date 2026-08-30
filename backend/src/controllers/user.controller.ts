@@ -84,6 +84,13 @@ export const getMyProgress = async (
          }),
       ]);
 
+      // Fetch difficulty totals in parallel
+      const [easyTotal, mediumTotal, hardTotal] = await Promise.all([
+         prisma.problem.count({ where: { difficulty: "EASY" } }),
+         prisma.problem.count({ where: { difficulty: "MEDIUM" } }),
+         prisma.problem.count({ where: { difficulty: "HARD" } }),
+      ]);
+
       // Problems that have not been started
       const notStarted =
          totalProblems - solved - attempted;
@@ -101,13 +108,17 @@ export const getMyProgress = async (
          data: {
             totalProblems,
 
-            solved,
-            attempted,
+            totalSolved: solved,
+            totalAttempted: attempted,
             notStarted,
 
             easySolved,
             mediumSolved,
             hardSolved,
+
+            easyTotal,
+            mediumTotal,
+            hardTotal,
 
             progressPercentage,
          },

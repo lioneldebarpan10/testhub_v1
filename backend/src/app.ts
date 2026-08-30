@@ -4,9 +4,11 @@ import prisma from "./config/prisma.js";
 
 import authRoutes from "./routes/auth.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
+import sheetRoutes from "./routes/sheet.routes.js";
 import topicRoutes from "./routes/topic.routes.js";
 import companyRoutes from "./routes/company.routes.js";
 import problemRoutes from "./routes/problem.routes.js";
+import articleRoutes from "./routes/article.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import courseRoutes from "./routes/course.routes.js";
 import moduleRoutes from "./routes/module.routes.js";
@@ -45,9 +47,11 @@ app.get("/api/health", async (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/sheets", sheetRoutes);
 app.use("/api/topics", topicRoutes);
 app.use("/api/companies", companyRoutes);
 app.use("/api/problems", problemRoutes);
+app.use("/api/articles", articleRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/modules", moduleRoutes);
