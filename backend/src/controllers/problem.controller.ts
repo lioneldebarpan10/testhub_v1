@@ -327,7 +327,7 @@ export const createProblem = async (
 
                examples:
                   examples !== undefined
-                     ? examples as Prisma.InputJsonValue
+                     ? (examples as Prisma.InputJsonValue)
                      : undefined,
 
                solution,
@@ -341,17 +341,26 @@ export const createProblem = async (
                },
 
                companies: {
-                  connect: [
-                     ...new Set(companyIds),
-                  ].map((id: string) => ({
-                     id,
-                  })),
+                  create: [...new Set(companyIds)].map(
+                     (companyId: string) => ({
+                        company: {
+                           connect: {
+                              id: companyId,
+                           },
+                        },
+                     })
+                  ),
                },
             },
 
             include: {
                topic: true,
-               companies: true,
+
+               companies: {
+                  include: {
+                     company: true,
+                  },
+               },
             },
          });
 
