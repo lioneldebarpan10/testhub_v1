@@ -15,7 +15,7 @@ export const getArticleByProblemSlug = async (
     const { problemSlug } = req.params;
 
     const problem = await prisma.problem.findUnique({
-      where: { slug: problemSlug },
+      where: { slug: Array.isArray(problemSlug) ? problemSlug[0] : problemSlug },
       select: { id: true },
     });
 
@@ -57,6 +57,7 @@ export const createOrUpdateArticle = async (
 ) => {
   try {
     const { problemId } = req.params;
+    const problemIdStr = Array.isArray(problemId) ? problemId[0] : problemId;
     const {
       statement,
       examples,
@@ -71,7 +72,7 @@ export const createOrUpdateArticle = async (
 
     // Check if problem exists
     const problem = await prisma.problem.findUnique({
-      where: { id: problemId },
+      where: { id: problemIdStr },
     });
 
     if (!problem) {
@@ -83,7 +84,7 @@ export const createOrUpdateArticle = async (
 
     // Check if article exists
     const existingArticle = await prisma.problemArticle.findUnique({
-      where: { problemId },
+      where: { problemId: problemIdStr },
     });
 
     let article;
@@ -91,7 +92,7 @@ export const createOrUpdateArticle = async (
     if (existingArticle) {
       // Update existing article
       article = await prisma.problemArticle.update({
-        where: { problemId },
+        where: { problemId: problemIdStr },
         data: {
           statement: statement || undefined,
           examples: examples || undefined,
@@ -108,7 +109,7 @@ export const createOrUpdateArticle = async (
       // Create new article
       article = await prisma.problemArticle.create({
         data: {
-          problemId,
+          problemId: problemIdStr,
           statement: statement || null,
           examples: examples || null,
           bruteForce: bruteForce || null,
@@ -143,9 +144,10 @@ export const getArticle = async (
 ) => {
   try {
     const { problemId } = req.params;
+    const problemIdStr = Array.isArray(problemId) ? problemId[0] : problemId;
 
     const article = await prisma.problemArticle.findUnique({
-      where: { problemId },
+      where: { problemId: problemIdStr },
     });
 
     if (!article) {
@@ -175,9 +177,10 @@ export const deleteArticle = async (
 ) => {
   try {
     const { problemId } = req.params;
+    const problemIdStr = Array.isArray(problemId) ? problemId[0] : problemId;
 
     const article = await prisma.problemArticle.findUnique({
-      where: { problemId },
+      where: { problemId: problemIdStr },
     });
 
     if (!article) {
@@ -188,7 +191,7 @@ export const deleteArticle = async (
     }
 
     await prisma.problemArticle.delete({
-      where: { problemId },
+      where: { problemId: problemIdStr },
     });
 
     res.status(200).json({

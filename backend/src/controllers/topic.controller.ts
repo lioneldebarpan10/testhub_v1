@@ -92,7 +92,7 @@ export const getTopicBySlug = async (
          throw new AppError("Invalid topic slug", 400);
       }
 
-      const topic = await prisma.topic.findUnique({
+      const topic = await prisma.topic.findFirst({
          where: {
             slug,
          },

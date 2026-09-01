@@ -10,17 +10,32 @@ import {
   AlertCircle,
   Loader,
   HelpCircle,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  Trash2,
+  FolderPlus,
 } from "lucide-react";
 import { getAdminDashboard } from "../../api/admin.api";
 import { createCourse, getAllCourses } from "../../api/course.api";
-import { createProblem, getAllProblems } from "../../api/problem.api";
+import { createProblem, getAllProblems, updateProblem } from "../../api/problem.api";
 import { saveArticle, getArticle } from "../../api/article.api";
-import { getAllTopics } from "../../api/topic.api";
+import { getAllTopics, createTopic } from "../../api/topic.api";
 import type { Course, Problem, Topic } from "../../types/problem";
+import { createSheet } from "../../api/sheet.api";
+
+type SheetTopicDraft = {
+  id: string;
+  name: string;
+  problemIds: string[];
+  isOpen: boolean;
+};
 
 const AdminPage = () => {
-  // Tabs: 'dashboard' | 'courses' | 'problems' | 'articles'
-  const [activeTab, setActiveTab] = useState<"dashboard" | "courses" | "problems" | "articles">("dashboard");
+
+  const [activeTab, setActiveTab] = useState<
+    "dashboard" | "courses" | "problems" | "articles" | "sheets"
+  >("dashboard");
 
   // Loading and error states
   const [loading, setLoading] = useState(false);
@@ -60,6 +75,20 @@ const AdminPage = () => {
   const [articleCode, setArticleCode] = useState("");
   const [articleComplexity, setArticleComplexity] = useState("");
   const [articleVideoUrl, setArticleVideoUrl] = useState("");
+
+
+  const [sheetName, setSheetName] = useState("");
+  const [sheetDescription, setSheetDescription] = useState("");
+  const [sheetPublished, setSheetPublished] = useState(false);
+
+  const [sheetTopics, setSheetTopics] = useState<SheetTopicDraft[]>([
+    {
+      id: Date.now().toString(),
+      name: "",
+      problemIds: [],
+      isOpen: true,
+    },
+  ]);
 
   // Load Dashboard data
   const loadDashboardData = async () => {
@@ -107,8 +136,14 @@ const AdminPage = () => {
   useEffect(() => {
     if (activeTab === "dashboard") loadDashboardData();
     if (activeTab === "courses") loadCoursesData();
-    if (activeTab === "problems") loadProblemsAndTopics();
-    if (activeTab === "articles") loadProblemsAndTopics();
+
+    if (
+      activeTab === "problems" ||
+      activeTab === "articles" ||
+      activeTab === "sheets"
+    ) {
+      loadProblemsAndTopics();
+    }
     setSuccessMessage("");
     setErrorMessage("");
   }, [activeTab]);
@@ -249,6 +284,195 @@ const AdminPage = () => {
     }
   };
 
+  // ====================
+  // SHEET BUILDER HANDLERS
+  // ====================
+
+  const addTopicDrawer = () => {
+    setSheetTopics((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-${Math.random()}`,
+        name: "",
+        problemIds: [],
+        isOpen: true,
+      },
+    ]);
+  };
+
+  const removeTopicDrawer = (topicDraftId: string) => {
+    setSheetTopics((prev) =>
+      prev.filter((topic) => topic.id !== topicDraftId)
+    );
+  };
+
+  const toggleTopicDrawer = (topicDraftId: string) => {
+    setSheetTopics((prev) =>
+      prev.map((topic) =>
+        topic.id === topicDraftId
+          ? { ...topic, isOpen: !topic.isOpen }
+          : topic
+      )
+    );
+  };
+
+  const updateTopicName = (
+    topicDraftId: string,
+    name: string
+  ) => {
+    setSheetTopics((prev) =>
+      prev.map((topic) =>
+        topic.id === topicDraftId
+          ? { ...topic, name }
+          : topic
+      )
+    );
+  };
+
+  const toggleProblemForTopic = (
+    topicDraftId: string,
+    problemId: string
+  ) => {
+    setSheetTopics((prev) =>
+      prev.map((topic) => {
+        if (topic.id !== topicDraftId) {
+          // Remove the problem from other topics so
+          // one problem belongs to only one topic
+          return {
+            ...topic,
+            problemIds: topic.problemIds.filter(
+              (id) => id !== problemId
+            ),
+          };
+        }
+
+        const alreadySelected =
+          topic.problemIds.includes(problemId);
+
+        return {
+          ...topic,
+          problemIds: alreadySelected
+            ? topic.problemIds.filter(
+              (id) => id !== problemId
+            )
+            : [...topic.problemIds, problemId],
+        };
+      })
+    );
+  };
+
+  const handleCreateSheet = async (
+    e: React.FormEvent
+  ) => {
+    e.preventDefault();
+
+    setSuccessMessage("");
+    setErrorMessage("");
+
+    if (!sheetName.trim()) {
+      setErrorMessage("Sheet name is required");
+      return;
+    }
+
+    const validTopics = sheetTopics.filter(
+      (topic) => topic.name.trim()
+    );
+
+    if (validTopics.length === 0) {
+      setErrorMessage(
+        "Please add at least one topic to the sheet"
+      );
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // 1. CREATE THE SHEET
+      const sheetResponse = await createSheet(
+        sheetName.trim(),
+        sheetDescription.trim() || undefined,
+        sheetPublished
+      );
+
+      const createdSheet =
+        sheetResponse.data || sheetResponse;
+
+      const createdSheetId = createdSheet.id;
+
+      if (!createdSheetId) {
+        throw new Error(
+          "Sheet was created but its ID could not be found"
+        );
+      }
+
+      // 2. CREATE TOPICS INSIDE THE SHEET
+      // 3. ASSIGN EXISTING PROBLEMS TO EACH TOPIC
+
+      for (let index = 0; index < validTopics.length; index++) {
+        const topicDraft = validTopics[index];
+
+        const topicResponse = await createTopic(
+          topicDraft.name.trim(),
+          createdSheetId,
+          undefined,
+          index + 1
+        );
+
+        const createdTopic =
+          topicResponse.data || topicResponse;
+
+        const createdTopicId = createdTopic.id;
+
+        if (!createdTopicId) {
+          throw new Error(
+            `Failed to get ID for topic: ${topicDraft.name}`
+          );
+        }
+
+        // Assign selected existing problems to this topic
+        for (const problemId of topicDraft.problemIds) {
+          await updateProblem(problemId, {
+            topicId: createdTopicId,
+          });
+        }
+      }
+
+      setSuccessMessage(
+        "Sheet created successfully with topics and problems!"
+      );
+
+      // Reset Sheet Builder
+      setSheetName("");
+      setSheetDescription("");
+      setSheetPublished(false);
+
+      setSheetTopics([
+        {
+          id: Date.now().toString(),
+          name: "",
+          problemIds: [],
+          isOpen: true,
+        },
+      ]);
+
+      // Reload data
+      await loadProblemsAndTopics();
+      await loadDashboardData();
+
+    } catch (err: any) {
+      console.error("Sheet creation error:", err);
+
+      setErrorMessage(
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to create sheet"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Page Header */}
@@ -268,18 +492,19 @@ const AdminPage = () => {
       <div className="flex border-b border-gray-850 gap-2 overflow-x-auto pb-px">
         {[
           { id: "dashboard", label: "Overview", icon: <Layers className="h-4 w-4" /> },
+          { id: "sheets", label: "Create Sheet", icon: <FolderPlus className="h-4 w-4" /> },
           { id: "courses", label: "Post Course", icon: <GraduationCap className="h-4 w-4" /> },
           { id: "problems", label: "Post Question", icon: <HelpCircle className="h-4 w-4" /> },
           { id: "articles", label: "Post Article", icon: <FileText className="h-4 w-4" /> },
+
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition whitespace-nowrap ${
-              activeTab === tab.id
-                ? "border-yellow-400 text-yellow-400"
-                : "border-transparent text-gray-400 hover:border-gray-700 hover:text-white"
-            }`}
+            className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition whitespace-nowrap ${activeTab === tab.id
+              ? "border-yellow-400 text-yellow-400"
+              : "border-transparent text-gray-400 hover:border-gray-700 hover:text-white"
+              }`}
           >
             {tab.icon}
             {tab.label}
@@ -333,6 +558,309 @@ const AdminPage = () => {
               </div>
             )
           )}
+        </div>
+      )}
+      {activeTab === "sheets" && (
+        <div className="mx-auto max-w-5xl space-y-6">
+          {/* Header */}
+          <div className="rounded-xl border border-gray-850 bg-gray-900/30 p-6">
+            <div className="flex items-center gap-3">
+              <FolderPlus className="h-6 w-6 text-yellow-400" />
+
+              <div>
+                <h2 className="text-xl font-bold text-white">
+                  Create DSA Sheet
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-400">
+                  Create a sheet, add topics, and assign existing
+                  problems to each topic.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <form
+            onSubmit={handleCreateSheet}
+            className="space-y-6"
+          >
+            {/* ==================== */}
+            {/* SHEET INFORMATION */}
+            {/* ==================== */}
+
+            <div className="rounded-xl border border-gray-850 bg-gray-900/30 p-6">
+              <h3 className="mb-5 flex items-center gap-2 text-lg font-bold text-white">
+                <BookOpen className="h-5 w-5 text-yellow-400" />
+                Sheet Information
+              </h3>
+
+              <div className="space-y-5">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-400">
+                    Sheet Name *
+                  </label>
+
+                  <input
+                    type="text"
+                    placeholder="e.g. Striver A2Z DSA Sheet"
+                    value={sheetName}
+                    onChange={(e) =>
+                      setSheetName(e.target.value)
+                    }
+                    className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 text-white outline-none transition focus:border-yellow-400"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-400">
+                    Sheet Description
+                  </label>
+
+                  <textarea
+                    placeholder="Describe what students will learn from this sheet..."
+                    value={sheetDescription}
+                    onChange={(e) =>
+                      setSheetDescription(e.target.value)
+                    }
+                    rows={3}
+                    className="w-full resize-none rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 text-white outline-none transition focus:border-yellow-400"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    id="sheetPublished"
+                    type="checkbox"
+                    checked={sheetPublished}
+                    onChange={(e) =>
+                      setSheetPublished(e.target.checked)
+                    }
+                    className="h-4 w-4"
+                  />
+
+                  <label
+                    htmlFor="sheetPublished"
+                    className="cursor-pointer text-sm text-gray-300"
+                  >
+                    Publish immediately
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* ==================== */}
+            {/* TOPIC DRAWERS */}
+            {/* ==================== */}
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-white">
+                    Topics & Problems
+                  </h3>
+
+                  <p className="mt-1 text-sm text-gray-400">
+                    Each topic can contain multiple existing problems.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={addTopicDrawer}
+                  className="flex items-center gap-2 rounded-lg border border-yellow-400/30 bg-yellow-400/10 px-4 py-2 text-sm font-medium text-yellow-400 transition hover:bg-yellow-400/20"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Topic
+                </button>
+              </div>
+
+              {/* Topic Drawers */}
+              {sheetTopics.map((topicDraft, topicIndex) => (
+                <div
+                  key={topicDraft.id}
+                  className="overflow-hidden rounded-xl border border-gray-800 bg-gray-900/30"
+                >
+                  {/* Drawer Header */}
+                  <div className="flex items-center">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        toggleTopicDrawer(topicDraft.id)
+                      }
+                      className="flex flex-1 items-center justify-between p-5 text-left transition hover:bg-gray-900/60"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-yellow-400/10 text-sm font-bold text-yellow-400">
+                          {topicIndex + 1}
+                        </div>
+
+                        <div>
+                          <p className="font-semibold text-white">
+                            {topicDraft.name.trim() ||
+                              `Topic ${topicIndex + 1}`}
+                          </p>
+
+                          <p className="mt-0.5 text-xs text-gray-500">
+                            {
+                              topicDraft.problemIds.length
+                            } problem
+                            {topicDraft.problemIds.length !== 1
+                              ? "s"
+                              : ""}{" "}
+                            selected
+                          </p>
+                        </div>
+                      </div>
+
+                      {topicDraft.isOpen ? (
+                        <ChevronUp className="h-5 w-5 text-gray-400" />
+                      ) : (
+                        <ChevronDown className="h-5 w-5 text-gray-400" />
+                      )}
+                    </button>
+
+                    {sheetTopics.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          removeTopicDrawer(topicDraft.id)
+                        }
+                        className="mr-4 rounded-lg p-2 text-gray-500 transition hover:bg-red-500/10 hover:text-red-400"
+                        title="Remove topic"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Drawer Content */}
+                  {topicDraft.isOpen && (
+                    <div className="space-y-5 border-t border-gray-800 p-5">
+                      {/* Topic Name */}
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium text-gray-400">
+                          Topic Name *
+                        </label>
+
+                        <input
+                          type="text"
+                          placeholder="e.g. Arrays"
+                          value={topicDraft.name}
+                          onChange={(e) =>
+                            updateTopicName(
+                              topicDraft.id,
+                              e.target.value
+                            )
+                          }
+                          className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 text-white outline-none transition focus:border-yellow-400"
+                        />
+                      </div>
+
+                      {/* Existing Problems */}
+                      <div>
+                        <div className="mb-3">
+                          <label className="block text-sm font-medium text-gray-400">
+                            Select Existing Problems
+                          </label>
+
+                          <p className="mt-1 text-xs text-gray-500">
+                            Selected problems will be placed inside
+                            this topic.
+                          </p>
+                        </div>
+
+                        <div className="max-h-72 space-y-2 overflow-y-auto rounded-lg border border-gray-800 bg-gray-950 p-3">
+                          {problems.length === 0 ? (
+                            <div className="py-6 text-center text-sm text-gray-500">
+                              No existing problems found.
+                            </div>
+                          ) : (
+                            problems.map((problem) => {
+                              const isSelected =
+                                topicDraft.problemIds.includes(
+                                  problem.id
+                                );
+
+                              return (
+                                <label
+                                  key={problem.id}
+                                  className={`flex cursor-pointer items-center justify-between rounded-lg border px-4 py-3 transition ${isSelected
+                                      ? "border-yellow-400/50 bg-yellow-400/10"
+                                      : "border-gray-800 hover:border-gray-700 hover:bg-gray-900"
+                                    }`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() =>
+                                        toggleProblemForTopic(
+                                          topicDraft.id,
+                                          problem.id
+                                        )
+                                      }
+                                      className="h-4 w-4"
+                                    />
+
+                                    <div>
+                                      <p className="text-sm font-medium text-white">
+                                        {problem.title}
+                                      </p>
+
+                                      <p className="mt-1 text-xs text-gray-500">
+                                        {problem.topic?.name ||
+                                          "Unassigned Topic"}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <span
+                                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ${problem.difficulty ===
+                                        "EASY"
+                                        ? "bg-green-500/10 text-green-400"
+                                        : problem.difficulty ===
+                                          "MEDIUM"
+                                          ? "bg-yellow-500/10 text-yellow-400"
+                                          : "bg-red-500/10 text-red-400"
+                                      }`}
+                                  >
+                                    {problem.difficulty}
+                                  </span>
+                                </label>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* ==================== */}
+            {/* CREATE BUTTON */}
+            {/* ==================== */}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-yellow-400 px-5 py-3 font-semibold text-black transition hover:bg-yellow-300 disabled:opacity-50"
+            >
+              {loading ? (
+                <>
+                  <Loader className="h-5 w-5 animate-spin" />
+                  Creating Sheet...
+                </>
+              ) : (
+                <>
+                  <FolderPlus className="h-5 w-5" />
+                  Create Complete Sheet
+                </>
+              )}
+            </button>
+          </form>
         </div>
       )}
 
@@ -574,13 +1102,12 @@ const AdminPage = () => {
                       <p className="text-sm font-medium text-white">{p.title}</p>
                       <p className="text-xs text-gray-500 mt-0.5">
                         <span
-                          className={`font-semibold ${
-                            p.difficulty === "EASY"
-                              ? "text-green-400"
-                              : p.difficulty === "MEDIUM"
-                                ? "text-yellow-400"
-                                : "text-red-400"
-                          }`}
+                          className={`font-semibold ${p.difficulty === "EASY"
+                            ? "text-green-400"
+                            : p.difficulty === "MEDIUM"
+                              ? "text-yellow-400"
+                              : "text-red-400"
+                            }`}
                         >
                           {p.difficulty}
                         </span>{" "}

@@ -68,28 +68,42 @@ export const getSheetBySlug = async (
   next: NextFunction
 ) => {
   try {
-    const { slug } = req.params;
+    const slug = Array.isArray(req.params.slug) ? req.params.slug[0] : req.params.slug;
 
     const sheet = await prisma.sheet.findUnique({
-      where: { slug },
+      where: {
+        slug,
+      },
+
       include: {
         topics: {
+          orderBy: {
+            order: "asc",
+          },
+
           include: {
+            problems: {
+              include: {
+                topic: true,
+                companies: true,
+              },
+            },
+
             modules: {
+              orderBy: {
+                order: "asc",
+              },
+
               include: {
                 problems: {
-                  select: {
-                    id: true,
-                    title: true,
-                    slug: true,
-                    difficulty: true,
+                  include: {
+                    topic: true,
+                    companies: true,
                   },
                 },
               },
-              orderBy: { order: "asc" },
             },
           },
-          orderBy: { order: "asc" },
         },
       },
     });
@@ -101,7 +115,7 @@ export const getSheetBySlug = async (
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: sheet,
     });
@@ -172,7 +186,7 @@ export const updateSheet = async (
   next: NextFunction
 ) => {
   try {
-    const { id } = req.params;
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const { name, description, published, order } = req.body;
 
     const sheet = await prisma.sheet.findUnique({
@@ -187,7 +201,7 @@ export const updateSheet = async (
     }
 
     const updatedData: any = {};
-    if (name) {
+    if (name && typeof name === "string") {
       updatedData.name = name;
       updatedData.slug = createSlug(name);
     }
@@ -221,9 +235,10 @@ export const deleteSheet = async (
 ) => {
   try {
     const { id } = req.params;
+    const sheetId = Array.isArray(id) ? id[0] : id;
 
     const sheet = await prisma.sheet.findUnique({
-      where: { id },
+      where: { id: sheetId },
     });
 
     if (!sheet) {
@@ -234,7 +249,7 @@ export const deleteSheet = async (
     }
 
     await prisma.sheet.delete({
-      where: { id },
+      where: { id: sheetId },
     });
 
     res.status(200).json({

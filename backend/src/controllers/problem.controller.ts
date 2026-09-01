@@ -91,7 +91,9 @@ export const getAllProblems = async (
       ) {
          where.companies = {
             some: {
-               slug: company.trim(),
+               company: {
+                  slug: company.trim(),
+               },
             },
          };
       }
@@ -743,7 +745,7 @@ export const updateProblemProgress = async (
       const solvedAt =
          status === "SOLVED"
             ? existingProgress?.solvedAt ??
-              new Date()
+            new Date()
             : null;
 
       const progress =

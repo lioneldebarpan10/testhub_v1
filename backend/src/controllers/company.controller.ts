@@ -17,13 +17,6 @@ export const getAllCompanies = async (
          orderBy: {
             name: "asc",
          },
-         include: {
-            _count: {
-               select: {
-                  problems: true,
-               },
-            },
-         },
       });
 
       return res.status(200).json({
@@ -108,13 +101,6 @@ export const getCompanyBySlug = async (
          where: {
             slug,
          },
-         include: {
-            _count: {
-               select: {
-                  problems: true,
-               },
-            },
-         },
       });
 
       if (!company) {
@@ -158,7 +144,6 @@ export const updateCompany = async (
       const cleanName = name.trim();
       const slug = createSlug(cleanName);
 
-      // Check if another company already has this name or slug
       const existingCompany = await prisma.company.findFirst({
          where: {
             OR: [
