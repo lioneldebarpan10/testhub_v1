@@ -9,6 +9,7 @@ import SheetsPage from "../pages/sheets/SheetsPage";
 import SheetDetailsPage from "../pages/sheets/SheetDetailsPage";
 import ProblemsPage from "../pages/problems/ProblemsPage";
 import CoursesPage from "../pages/courses/CoursesPage";
+import CourseDetailsPage from "../pages/courses/CourseDetailsPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import ProblemDetailsPage from "../pages/problems/ProblemDetailsPage";
 import BookmarksPage from "../pages/bookmarks/BookmarksPage";
@@ -89,6 +90,17 @@ const AppRoutes = () => {
           <ProtectedRoute>
             <MainLayout>
               <CoursesPage />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/courses/:slug"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <CourseDetailsPage />
             </MainLayout>
           </ProtectedRoute>
         }

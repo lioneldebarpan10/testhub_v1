@@ -182,16 +182,129 @@ const SheetDetailsPage = () => {
     return <div className="text-gray-400">Sheet not found</div>;
   }
 
+  // Calculate statistics
+  const calculateStats = () => {
+    let totalProblems = 0;
+    let solvedCount = 0;
+    let attemptedCount = 0;
+    let easyCount = 0;
+    let mediumCount = 0;
+    let hardCount = 0;
+
+    sheet.topics?.forEach((topic: Topic) => {
+      topic.problems?.forEach((problem: Problem) => {
+        totalProblems++;
+        if (problem.progress?.status === "SOLVED") solvedCount++;
+        if (problem.progress?.status === "ATTEMPTED") attemptedCount++;
+        
+        if (problem.difficulty === "EASY") easyCount++;
+        else if (problem.difficulty === "MEDIUM") mediumCount++;
+        else if (problem.difficulty === "HARD") hardCount++;
+      });
+
+      topic.modules?.forEach((mod: DsaModule) => {
+        mod.problems?.forEach((problem: Problem) => {
+          totalProblems++;
+          if (problem.progress?.status === "SOLVED") solvedCount++;
+          if (problem.progress?.status === "ATTEMPTED") attemptedCount++;
+          
+          if (problem.difficulty === "EASY") easyCount++;
+          else if (problem.difficulty === "MEDIUM") mediumCount++;
+          else if (problem.difficulty === "HARD") hardCount++;
+        });
+      });
+    });
+
+    const progressPercentage = totalProblems > 0 ? (solvedCount / totalProblems) * 100 : 0;
+
+    return {
+      totalProblems,
+      solvedCount,
+      attemptedCount,
+      easyCount,
+      mediumCount,
+      hardCount,
+      progressPercentage,
+    };
+  };
+
+  const stats = calculateStats();
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-4xl font-bold text-white">{sheet.name}</h1>
+      {/* Header Section */}
+      <div className="rounded-2xl border border-blue-500/30 bg-gradient-to-r from-blue-950/30 to-blue-900/10 p-8">
+        <h1 className="text-4xl font-bold text-white mb-3">{sheet.name}</h1>
         {sheet.description && (
-          <p className="mt-2 text-gray-400">{sheet.description}</p>
+          <p className="text-gray-300 leading-relaxed mb-6">{sheet.description}</p>
         )}
+        
+        {/* Quick Stats */}
+        <div className="grid grid-cols-4 gap-3 mt-6">
+          <div className="rounded-lg bg-gray-900/50 border border-gray-700 p-3">
+            <p className="text-xs text-gray-500 mb-1">Total Problems</p>
+            <p className="text-2xl font-bold text-blue-400">{stats.totalProblems}</p>
+          </div>
+          <div className="rounded-lg bg-gray-900/50 border border-gray-700 p-3">
+            <p className="text-xs text-gray-500 mb-1">Solved</p>
+            <p className="text-2xl font-bold text-green-400">{stats.solvedCount}</p>
+          </div>
+          <div className="rounded-lg bg-gray-900/50 border border-gray-700 p-3">
+            <p className="text-xs text-gray-500 mb-1">Attempted</p>
+            <p className="text-2xl font-bold text-yellow-400">{stats.attemptedCount}</p>
+          </div>
+          <div className="rounded-lg bg-gray-900/50 border border-gray-700 p-3">
+            <p className="text-xs text-gray-500 mb-1">Topics</p>
+            <p className="text-2xl font-bold text-purple-400">{sheet.topics?.length || 0}</p>
+          </div>
+        </div>
       </div>
 
+      {/* Progress Bar */}
+      <div className="rounded-xl border border-gray-800 bg-gray-900/30 p-6">
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-lg font-semibold text-white">Overall Progress</h3>
+            <span className="text-sm text-gray-400">{stats.solvedCount} / {stats.totalProblems} solved</span>
+          </div>
+          <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden">
+            <div 
+              className="bg-gradient-to-r from-green-500 to-green-400 h-full rounded-full transition-all duration-500"
+              style={{ width: `${stats.progressPercentage}%` }}
+            />
+          </div>
+          <p className="text-xs text-gray-500 mt-2">{Math.round(stats.progressPercentage)}% complete</p>
+        </div>
+
+        {/* Difficulty Distribution */}
+        <div className="mt-6">
+          <p className="text-sm font-medium text-gray-400 mb-3">Difficulty Distribution</p>
+          <div className="flex gap-2 flex-wrap">
+            {stats.easyCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/20 px-3 py-1 text-xs font-medium text-green-400 border border-green-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                Easy ({stats.easyCount})
+              </span>
+            )}
+            {stats.mediumCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-medium text-yellow-400 border border-yellow-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+                Medium ({stats.mediumCount})
+              </span>
+            )}
+            {stats.hardCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/20 px-3 py-1 text-xs font-medium text-red-400 border border-red-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                Hard ({stats.hardCount})
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Topics Section */}
       <div className="space-y-4">
+        <h2 className="text-2xl font-bold text-white">Topics</h2>
         {sheet.topics && sheet.topics.length > 0 ? (
           sheet.topics.map((topic: Topic) => (
             <div

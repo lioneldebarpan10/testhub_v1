@@ -35,6 +35,11 @@ export const getAllSheets = async (
               slug: true,
             },
           },
+          _count: {
+            select: {
+              topics: true,
+            },
+          },
         },
         orderBy: { order: "asc" },
         skip: (currentPage - 1) * pageSize,

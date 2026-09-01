@@ -11,7 +11,7 @@ export const generateAccessToken = (userId: string, role: string) => {
       },
       accessSecret,
       {
-         expiresIn: "15m",
+         expiresIn: "7d", // Increased from 15m to 7 days
       }
    );
 };
@@ -23,7 +23,7 @@ export const generateRefreshToken = (userId: string) => {
       },
       refreshSecret,
       {
-         expiresIn: "7d",
+         expiresIn: "30d", // Increased from 7d to 30 days
       }
    );
 };

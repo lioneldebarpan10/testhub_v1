@@ -48,6 +48,7 @@ export const createProblem = async (problemData: {
   description: string;
   difficulty: "EASY" | "MEDIUM" | "HARD";
   topicId: string;
+  companyIds?: string[];
   constraints?: string;
   examples?: any;
   solution?: string;
@@ -69,6 +70,7 @@ export const updateProblem = async (
     description: string;
     difficulty: "EASY" | "MEDIUM" | "HARD";
     topicId: string;
+    companyIds?: string[];
     constraints?: string;
     examples?: any;
     solution?: string;

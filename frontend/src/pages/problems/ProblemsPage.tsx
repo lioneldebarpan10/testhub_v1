@@ -6,23 +6,33 @@ import {
   Check,
   Loader,
   ExternalLink,
+  FileText,
 } from "lucide-react";
 import { getAllProblems } from "../../api/problem.api";
+import { getAllTopics } from "../../api/topic.api";
+import { getAllCompanies } from "../../api/company.api";
 import {
   addBookmark,
   removeBookmark,
 } from "../../api/bookmark.api";
 import { useAuth } from "../../hooks/useAuth";
-import type { Problem } from "../../types/problem";
+import type { Problem, Topic, Company } from "../../types/problem";
 
 type DifficultyFilter = "ALL" | "EASY" | "MEDIUM" | "HARD";
+type StatusFilter = "ALL" | "NOT_STARTED" | "ATTEMPTED" | "SOLVED";
 
 const ProblemsPage = () => {
   const { user } = useAuth();
   const [problems, setProblems] = useState<Problem[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [difficulty, setDifficulty] = useState<DifficultyFilter>("ALL");
+  const [topicFilter, setTopicFilter] = useState("ALL");
+  const [companyFilter, setCompanyFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [showBookmarkedOnly, setShowBookmarkedOnly] = useState(false);
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
   const [bookmarkLoading, setBookmarkLoading] = useState<Set<string>>(
     new Set()
@@ -32,8 +42,15 @@ const ProblemsPage = () => {
     const fetchProblems = async () => {
       try {
         setLoading(true);
-        const response = await getAllProblems(1, 100);
-        setProblems(response.data || []);
+        const [problemsRes, topicsRes, companiesRes] = await Promise.all([
+          getAllProblems(1, 200),
+          getAllTopics(),
+          getAllCompanies(),
+        ]);
+
+        setProblems(problemsRes.data || []);
+        setTopics(topicsRes.data || []);
+        setCompanies(companiesRes.data || []);
       } catch (error) {
         console.error("Failed to fetch problems:", error);
         setProblems([]);
@@ -86,7 +103,26 @@ const ProblemsPage = () => {
     const matchesDifficulty =
       difficulty === "ALL" || problem.difficulty === difficulty;
 
-    return matchesSearch && matchesDifficulty;
+    const matchesTopic =
+      topicFilter === "ALL" || problem.topic?.slug === topicFilter;
+
+    const matchesCompany =
+      companyFilter === "ALL" ||
+      problem.companies?.some((company) => company.slug === companyFilter);
+
+    const matchesStatus =
+      statusFilter === "ALL" || problem.progress?.status === statusFilter;
+
+    const matchesBookmark = !showBookmarkedOnly || bookmarks.has(problem.id);
+
+    return (
+      matchesSearch &&
+      matchesDifficulty &&
+      matchesTopic &&
+      matchesCompany &&
+      matchesStatus &&
+      matchesBookmark
+    );
   });
 
   if (loading) {
@@ -120,7 +156,56 @@ const ProblemsPage = () => {
           />
         </div>
 
-        {/* Difficulty Filters */}
+        <div className="grid gap-3 md:grid-cols-4">
+          <select
+            value={difficulty}
+            onChange={(e) => setDifficulty(e.target.value as DifficultyFilter)}
+            className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-3 text-white outline-none focus:border-blue-600"
+          >
+            <option value="ALL">All Difficulties</option>
+            <option value="EASY">Easy</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="HARD">Hard</option>
+          </select>
+
+          <select
+            value={topicFilter}
+            onChange={(e) => setTopicFilter(e.target.value)}
+            className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-3 text-white outline-none focus:border-blue-600"
+          >
+            <option value="ALL">All Topics</option>
+            {topics.map((topic) => (
+              <option key={topic.id} value={topic.slug}>
+                {topic.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={companyFilter}
+            onChange={(e) => setCompanyFilter(e.target.value)}
+            className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-3 text-white outline-none focus:border-blue-600"
+          >
+            <option value="ALL">All Companies</option>
+            {companies.map((company) => (
+              <option key={company.id} value={company.slug}>
+                {company.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="rounded-lg border border-gray-800 bg-gray-900 px-4 py-3 text-white outline-none focus:border-blue-600"
+          >
+            <option value="ALL">All Status</option>
+            <option value="NOT_STARTED">Not Started</option>
+            <option value="ATTEMPTED">Attempted</option>
+            <option value="SOLVED">Solved</option>
+          </select>
+        </div>
+
         <div className="flex flex-wrap gap-3">
           {(["ALL", "EASY", "MEDIUM", "HARD"] as DifficultyFilter[]).map(
             (item) => (
@@ -139,6 +224,17 @@ const ProblemsPage = () => {
               </button>
             )
           )}
+          <button
+            onClick={() => setShowBookmarkedOnly(!showBookmarkedOnly)}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition flex items-center gap-2 ${
+              showBookmarkedOnly
+                ? "bg-yellow-600 text-white"
+                : "border border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-900/50"
+            }`}
+          >
+            <Bookmark className="h-4 w-4" />
+            Bookmarked
+          </button>
         </div>
       </div>
 
@@ -199,7 +295,7 @@ const ProblemsPage = () => {
               </div>
 
               {/* Difficulty */}
-              <div>
+              <div className="space-y-2">
                 <span
                   className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
                     problem.difficulty === "EASY"
@@ -211,6 +307,18 @@ const ProblemsPage = () => {
                 >
                   {problem.difficulty}
                 </span>
+                {problem.companies && problem.companies.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {problem.companies.slice(0, 2).map((company) => (
+                      <span
+                        key={company.id}
+                        className="rounded-full border border-gray-700 bg-gray-800/80 px-2 py-0.5 text-[10px] text-gray-300"
+                      >
+                        {company.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Status */}
@@ -242,6 +350,13 @@ const ProblemsPage = () => {
                     <ExternalLink className="h-4 w-4" />
                   </a>
                 )}
+                <Link
+                  to={`/problems/${problem.slug}`}
+                  className="p-2 rounded text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 transition"
+                  title="Open article"
+                >
+                  <FileText className="h-4 w-4" />
+                </Link>
                 <button
                   onClick={(e) =>
                     handleBookmark(

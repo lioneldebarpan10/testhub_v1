@@ -15,14 +15,28 @@ import {
   Plus,
   Trash2,
   FolderPlus,
+  Edit,
+  Settings,
+  Building2,
 } from "lucide-react";
 import { getAdminDashboard } from "../../api/admin.api";
-import { createCourse, getAllCourses } from "../../api/course.api";
-import { createProblem, getAllProblems, updateProblem } from "../../api/problem.api";
+import {
+  createCourse,
+  getAllCourses,
+  deleteCourse,
+  updateCourse,
+} from "../../api/course.api";
+import { createProblem, getAllProblems, updateProblem, deleteProblem } from "../../api/problem.api";
 import { saveArticle, getArticle } from "../../api/article.api";
-import { getAllTopics, createTopic } from "../../api/topic.api";
-import type { Course, Problem, Topic } from "../../types/problem";
-import { createSheet } from "../../api/sheet.api";
+import { getAllTopics, createTopic, updateTopic, deleteTopic } from "../../api/topic.api";
+import { getAllCompanies, createCompany, updateCompany, deleteCompany } from "../../api/company.api";
+import type { Course, Problem, Sheet, Topic, Company } from "../../types/problem";
+import {
+  createSheet,
+  getAllSheets,
+  deleteSheet,
+  updateSheet,
+} from "../../api/sheet.api";
 
 type SheetTopicDraft = {
   id: string;
@@ -34,7 +48,7 @@ type SheetTopicDraft = {
 const AdminPage = () => {
 
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "courses" | "problems" | "articles" | "sheets"
+    "dashboard" | "courses" | "problems" | "articles" | "sheets" | "topics" | "companies" | "modules"
   >("dashboard");
 
   // Loading and error states
@@ -45,8 +59,15 @@ const AdminPage = () => {
   // Data states
   const [stats, setStats] = useState<any>(null);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [sheets, setSheets] = useState<Sheet[]>([]);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+
+  // Edit states
+  const [editingProblemId, setEditingProblemId] = useState<string | null>(null);
+  const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
+  const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
 
   // Form states - Course
   const [courseTitle, setCourseTitle] = useState("");
@@ -63,6 +84,7 @@ const AdminPage = () => {
   const [problemExternalUrl, setProblemExternalUrl] = useState("");
   const [problemVideoUrl, setProblemVideoUrl] = useState("");
   const [problemSolution, setProblemSolution] = useState("");
+  const [problemCompanyIds, setProblemCompanyIds] = useState<string[]>([]);
 
   // Form states - Article
   const [articleProblemId, setArticleProblemId] = useState("");
@@ -76,6 +98,13 @@ const AdminPage = () => {
   const [articleComplexity, setArticleComplexity] = useState("");
   const [articleVideoUrl, setArticleVideoUrl] = useState("");
 
+  // Form states - Topic
+  const [topicName, setTopicName] = useState("");
+  const [topicDescription, setTopicDescription] = useState("");
+  const [topicOrder, setTopicOrder] = useState(0);
+
+  // Form states - Company
+  const [companyName, setCompanyName] = useState("");
 
   const [sheetName, setSheetName] = useState("");
   const [sheetDescription, setSheetDescription] = useState("");
@@ -107,8 +136,20 @@ const AdminPage = () => {
   const loadCoursesData = async () => {
     try {
       setLoading(true);
-      const res = await getAllCourses(false, 1, 100); // include unpublished
+      const res = await getAllCourses(false, 1, 100);
       setCourses(res.data || []);
+    } catch (err: any) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadSheetsData = async () => {
+    try {
+      setLoading(true);
+      const res = await getAllSheets(false, 1, 100);
+      setSheets(res.data || []);
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -120,12 +161,26 @@ const AdminPage = () => {
   const loadProblemsAndTopics = async () => {
     try {
       setLoading(true);
-      const [probRes, topicRes] = await Promise.all([
+      const [probRes, topicRes, compRes] = await Promise.all([
         getAllProblems(1, 100),
         getAllTopics(),
+        getAllCompanies(),
       ]);
       setProblems(probRes.data || []);
       setTopics(topicRes.data || []);
+      setCompanies(compRes.data || []);
+    } catch (err: any) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadCompaniesData = async () => {
+    try {
+      setLoading(true);
+      const res = await getAllCompanies();
+      setCompanies(res.data || []);
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -136,14 +191,26 @@ const AdminPage = () => {
   useEffect(() => {
     if (activeTab === "dashboard") loadDashboardData();
     if (activeTab === "courses") loadCoursesData();
+    if (activeTab === "sheets") {
+      loadSheetsData();
+      loadProblemsAndTopics();
+    }
 
     if (
       activeTab === "problems" ||
-      activeTab === "articles" ||
-      activeTab === "sheets"
+      activeTab === "articles"
     ) {
       loadProblemsAndTopics();
     }
+
+    if (activeTab === "topics") {
+      loadProblemsAndTopics();
+    }
+
+    if (activeTab === "companies") {
+      loadCompaniesData();
+    }
+
     setSuccessMessage("");
     setErrorMessage("");
   }, [activeTab]);
@@ -212,9 +279,37 @@ const AdminPage = () => {
       setCourseDescription("");
       setCourseThumbnail("");
       setCoursePublished(false);
-      loadCoursesData();
+      await loadCoursesData();
     } catch (err: any) {
       setErrorMessage(err.response?.data?.message || "Failed to post course");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleCoursePublished = async (courseId: string, currentPublished: boolean) => {
+    try {
+      setLoading(true);
+      await updateCourse(courseId, { published: !currentPublished });
+      setSuccessMessage("Course visibility updated successfully!");
+      await loadCoursesData();
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.message || "Failed to update course visibility");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteCourse = async (courseId: string) => {
+    if (!window.confirm("Delete this course? This action cannot be undone.")) return;
+
+    try {
+      setLoading(true);
+      await deleteCourse(courseId);
+      setSuccessMessage("Course deleted successfully!");
+      await loadCoursesData();
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.message || "Failed to delete course");
     } finally {
       setLoading(false);
     }
@@ -230,26 +325,180 @@ const AdminPage = () => {
     }
     try {
       setLoading(true);
-      await createProblem({
-        title: problemTitle.trim(),
-        description: problemDescription.trim(),
-        difficulty: problemDifficulty,
-        topicId: problemTopicId,
-        constraints: problemConstraints.trim() || undefined,
-        externalUrl: problemExternalUrl.trim() || undefined,
-        videoUrl: problemVideoUrl.trim() || undefined,
-        solution: problemSolution.trim() || undefined,
-      });
-      setSuccessMessage("Question/Problem posted successfully!");
+      
+      if (editingProblemId) {
+        await updateProblem(editingProblemId, {
+          title: problemTitle.trim(),
+          description: problemDescription.trim(),
+          difficulty: problemDifficulty,
+          topicId: problemTopicId,
+          companyIds: problemCompanyIds,
+          constraints: problemConstraints.trim() || undefined,
+          externalUrl: problemExternalUrl.trim() || undefined,
+          videoUrl: problemVideoUrl.trim() || undefined,
+          solution: problemSolution.trim() || undefined,
+        });
+        setSuccessMessage("Problem updated successfully!");
+        setEditingProblemId(null);
+      } else {
+        await createProblem({
+          title: problemTitle.trim(),
+          description: problemDescription.trim(),
+          difficulty: problemDifficulty,
+          topicId: problemTopicId,
+          companyIds: problemCompanyIds,
+          constraints: problemConstraints.trim() || undefined,
+          externalUrl: problemExternalUrl.trim() || undefined,
+          videoUrl: problemVideoUrl.trim() || undefined,
+          solution: problemSolution.trim() || undefined,
+        });
+        setSuccessMessage("Question/Problem posted successfully!");
+      }
+      
       setProblemTitle("");
       setProblemDescription("");
       setProblemConstraints("");
       setProblemExternalUrl("");
       setProblemVideoUrl("");
       setProblemSolution("");
+      setProblemCompanyIds([]);
       loadProblemsAndTopics();
     } catch (err: any) {
       setErrorMessage(err.response?.data?.message || "Failed to post question");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditProblem = (problem: Problem) => {
+    setProblemTitle(problem.title);
+    setProblemDescription(problem.description);
+    setProblemDifficulty(problem.difficulty);
+    setProblemTopicId(problem.topicId);
+    setProblemConstraints(problem.constraints || "");
+    setProblemExternalUrl(problem.externalUrl || "");
+    setProblemVideoUrl(problem.videoUrl || "");
+    setProblemSolution(problem.solution || "");
+    setProblemCompanyIds(problem.companies?.map(c => c.id) || []);
+    setEditingProblemId(problem.id);
+    setActiveTab("problems");
+    window.scrollTo(0, 0);
+  };
+
+  const handleDeleteProblem = async (problemId: string) => {
+    if (!window.confirm("Delete this problem? This action cannot be undone.")) return;
+
+    try {
+      setLoading(true);
+      await deleteProblem(problemId);
+      setSuccessMessage("Problem deleted successfully!");
+      await loadProblemsAndTopics();
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.message || "Failed to delete problem");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateTopic = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSuccessMessage("");
+    setErrorMessage("");
+    if (!topicName.trim()) {
+      setErrorMessage("Topic name is required");
+      return;
+    }
+    try {
+      setLoading(true);
+      if (editingTopicId) {
+        await updateTopic(editingTopicId, {
+          name: topicName.trim(),
+          description: topicDescription.trim() || undefined,
+          order: topicOrder,
+        });
+        setSuccessMessage("Topic updated successfully!");
+        setEditingTopicId(null);
+      } else {
+        await createTopic(topicName.trim(), "", topicDescription.trim() || undefined, topicOrder);
+        setSuccessMessage("Topic created successfully!");
+      }
+      setTopicName("");
+      setTopicDescription("");
+      setTopicOrder(0);
+      await loadProblemsAndTopics();
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.message || "Failed to save topic");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditTopic = (topic: Topic) => {
+    setTopicName(topic.name);
+    setTopicDescription(topic.description || "");
+    setTopicOrder(topic.order);
+    setEditingTopicId(topic.id);
+  };
+
+  const handleDeleteTopic = async (topicId: string) => {
+    if (!window.confirm("Delete this topic? This action cannot be undone.")) return;
+
+    try {
+      setLoading(true);
+      await deleteTopic(topicId);
+      setSuccessMessage("Topic deleted successfully!");
+      await loadProblemsAndTopics();
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.message || "Failed to delete topic");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSuccessMessage("");
+    setErrorMessage("");
+    if (!companyName.trim()) {
+      setErrorMessage("Company name is required");
+      return;
+    }
+    try {
+      setLoading(true);
+      if (editingCompanyId) {
+        await updateCompany(editingCompanyId, {
+          name: companyName.trim(),
+        });
+        setSuccessMessage("Company updated successfully!");
+        setEditingCompanyId(null);
+      } else {
+        await createCompany(companyName.trim());
+        setSuccessMessage("Company created successfully!");
+      }
+      setCompanyName("");
+      await loadCompaniesData();
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.message || "Failed to save company");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditCompany = (company: Company) => {
+    setCompanyName(company.name);
+    setEditingCompanyId(company.id);
+  };
+
+  const handleDeleteCompany = async (companyId: string) => {
+    if (!window.confirm("Delete this company? This action cannot be undone.")) return;
+
+    try {
+      setLoading(true);
+      await deleteCompany(companyId);
+      setSuccessMessage("Company deleted successfully!");
+      await loadCompaniesData();
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.message || "Failed to delete company");
     } finally {
       setLoading(false);
     }
@@ -456,7 +705,7 @@ const AdminPage = () => {
         },
       ]);
 
-      // Reload data
+      await loadSheetsData();
       await loadProblemsAndTopics();
       await loadDashboardData();
 
@@ -468,6 +717,34 @@ const AdminPage = () => {
         err.message ||
         "Failed to create sheet"
       );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleSheetPublished = async (sheetId: string, currentPublished: boolean) => {
+    try {
+      setLoading(true);
+      await updateSheet(sheetId, { published: !currentPublished });
+      setSuccessMessage("Sheet visibility updated successfully!");
+      await loadSheetsData();
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.message || "Failed to update sheet visibility");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteSheet = async (sheetId: string) => {
+    if (!window.confirm("Delete this sheet? This action cannot be undone.")) return;
+
+    try {
+      setLoading(true);
+      await deleteSheet(sheetId);
+      setSuccessMessage("Sheet deleted successfully!");
+      await loadSheetsData();
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.message || "Failed to delete sheet");
     } finally {
       setLoading(false);
     }
@@ -493,9 +770,11 @@ const AdminPage = () => {
         {[
           { id: "dashboard", label: "Overview", icon: <Layers className="h-4 w-4" /> },
           { id: "sheets", label: "Create Sheet", icon: <FolderPlus className="h-4 w-4" /> },
+          { id: "topics", label: "Topics", icon: <BookOpen className="h-4 w-4" /> },
           { id: "courses", label: "Post Course", icon: <GraduationCap className="h-4 w-4" /> },
           { id: "problems", label: "Post Question", icon: <HelpCircle className="h-4 w-4" /> },
           { id: "articles", label: "Post Article", icon: <FileText className="h-4 w-4" /> },
+          { id: "companies", label: "Companies", icon: <Building2 className="h-4 w-4" /> },
 
         ].map((tab) => (
           <button
@@ -577,6 +856,44 @@ const AdminPage = () => {
                   problems to each topic.
                 </p>
               </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-gray-850 bg-gray-900/30 p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white">Existing Sheets</h3>
+            </div>
+            <div className="space-y-3">
+              {sheets.length === 0 ? (
+                <p className="text-sm text-gray-500">No sheets created yet.</p>
+              ) : (
+                sheets.map((sheet) => (
+                  <div key={sheet.id} className="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-950/60 px-4 py-3">
+                    <div>
+                      <p className="font-medium text-white">{sheet.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {sheet.published ? "Published" : "Draft"} • {sheet.topics?.length ?? 0} topics
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSheetPublished(sheet.id, sheet.published)}
+                        className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-200 hover:border-gray-500"
+                      >
+                        {sheet.published ? "Unpublish" : "Publish"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSheet(sheet.id)}
+                        className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/20"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -942,7 +1259,7 @@ const AdminPage = () => {
                 <p className="text-sm text-gray-500 py-4">No courses listed yet.</p>
               ) : (
                 courses.map((c) => (
-                  <div key={c.id} className="py-3 flex items-center justify-between">
+                  <div key={c.id} className="py-3 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium text-white">{c.title}</p>
                       <p className="text-xs text-gray-500 mt-0.5">
@@ -952,6 +1269,22 @@ const AdminPage = () => {
                           <span className="text-gray-500">Draft</span>
                         )}
                       </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleCoursePublished(c.id, c.published)}
+                        className="rounded-lg border border-gray-700 px-2.5 py-1.5 text-[11px] font-medium text-gray-200 hover:border-gray-500"
+                      >
+                        {c.published ? "Unpublish" : "Publish"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCourse(c.id)}
+                        className="rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-medium text-red-300 hover:bg-red-500/20"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
                 ))
@@ -965,10 +1298,30 @@ const AdminPage = () => {
         <div className="grid gap-8 lg:grid-cols-3">
           {/* Post Question Form */}
           <div className="lg:col-span-2 rounded-xl border border-gray-850 bg-gray-900/30 p-6 space-y-6">
-            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-              <PlusCircle className="h-5 w-5 text-yellow-400" />
-              Create a DSA Problem
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <PlusCircle className="h-5 w-5 text-yellow-400" />
+                {editingProblemId ? "Edit DSA Problem" : "Create a DSA Problem"}
+              </h3>
+              {editingProblemId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingProblemId(null);
+                    setProblemTitle("");
+                    setProblemDescription("");
+                    setProblemConstraints("");
+                    setProblemExternalUrl("");
+                    setProblemVideoUrl("");
+                    setProblemSolution("");
+                    setProblemCompanyIds([]);
+                  }}
+                  className="text-sm text-gray-400 hover:text-gray-300"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
 
             <form onSubmit={handleCreateProblem} className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -1066,6 +1419,57 @@ const AdminPage = () => {
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Companies (Tags)</label>
+                <div className="space-y-2">
+                  <div className="grid gap-2 max-h-48 overflow-y-auto border border-gray-800 rounded-lg bg-gray-950 p-3">
+                    {companies.length === 0 ? (
+                      <p className="text-sm text-gray-500">No companies available. Create some in the Companies tab.</p>
+                    ) : (
+                      companies.map((c) => (
+                        <div key={c.id} className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id={`company-${c.id}`}
+                            checked={problemCompanyIds.includes(c.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setProblemCompanyIds([...problemCompanyIds, c.id]);
+                              } else {
+                                setProblemCompanyIds(problemCompanyIds.filter(id => id !== c.id));
+                              }
+                            }}
+                            className="h-4 w-4 rounded border-gray-600"
+                          />
+                          <label htmlFor={`company-${c.id}`} className="text-sm text-gray-300 cursor-pointer">
+                            {c.name}
+                          </label>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {problemCompanyIds.length > 0 && (
+                    <div className="flex gap-2 flex-wrap">
+                      {problemCompanyIds.map(id => {
+                        const company = companies.find(c => c.id === id);
+                        return company ? (
+                          <span key={id} className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-yellow-500/20 text-yellow-300 text-xs font-medium">
+                            {company.name}
+                            <button
+                              type="button"
+                              onClick={() => setProblemCompanyIds(problemCompanyIds.filter(cid => cid !== id))}
+                              className="hover:text-yellow-400"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1.5">Initial Solution Snippet (Optional)</label>
                 <textarea
                   placeholder="class Solution { ... }"
@@ -1081,7 +1485,7 @@ const AdminPage = () => {
                 disabled={loading}
                 className="w-full mt-4 rounded-lg bg-yellow-400 px-5 py-3 font-semibold text-black hover:bg-yellow-300 disabled:opacity-50 transition flex items-center justify-center gap-2"
               >
-                {loading ? <Loader className="h-5 w-5 animate-spin" /> : "Post Question"}
+                {loading ? <Loader className="h-5 w-5 animate-spin" /> : (editingProblemId ? "Update Problem" : "Post Question")}
               </button>
             </form>
           </div>
@@ -1097,7 +1501,7 @@ const AdminPage = () => {
                 <p className="text-sm text-gray-500 py-4">No problems created yet.</p>
               ) : (
                 problems.map((p) => (
-                  <div key={p.id} className="py-3 flex items-center justify-between">
+                  <div key={p.id} className="py-3 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium text-white">{p.title}</p>
                       <p className="text-xs text-gray-500 mt-0.5">
@@ -1112,7 +1516,223 @@ const AdminPage = () => {
                           {p.difficulty}
                         </span>{" "}
                         • {p.topic?.name || "No Topic"}
+                        {p.companies && p.companies.length > 0 && (
+                          <span className="ml-2">
+                            • {p.companies.map(c => c.name).join(", ")}
+                          </span>
+                        )}
                       </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEditProblem(p)}
+                        className="rounded-lg border border-blue-500/40 bg-blue-500/10 px-2 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-500/20"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteProblem(p.id)}
+                        className="rounded-lg border border-red-500/40 bg-red-500/10 px-2 py-1 text-[11px] font-medium text-red-300 hover:bg-red-500/20"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "topics" && (
+        <div className="grid gap-8 lg:grid-cols-3">
+          {/* Topic Form */}
+          <div className="lg:col-span-2 rounded-xl border border-gray-850 bg-gray-900/30 p-6 space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-yellow-400" />
+                {editingTopicId ? "Edit Topic" : "Create Topic"}
+              </h3>
+              {editingTopicId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingTopicId(null);
+                    setTopicName("");
+                    setTopicDescription("");
+                    setTopicOrder(0);
+                  }}
+                  className="text-sm text-gray-400 hover:text-gray-300"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            <form onSubmit={handleCreateTopic} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Topic Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Arrays, Linked Lists, Trees..."
+                  value={topicName}
+                  onChange={(e) => setTopicName(e.target.value)}
+                  className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-2.5 text-white outline-none focus:border-yellow-400 transition"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Description</label>
+                <textarea
+                  placeholder="Describe this topic..."
+                  value={topicDescription}
+                  onChange={(e) => setTopicDescription(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-2.5 text-white outline-none focus:border-yellow-400 transition resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Order</label>
+                <input
+                  type="number"
+                  value={topicOrder}
+                  onChange={(e) => setTopicOrder(parseInt(e.target.value))}
+                  className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-2.5 text-white outline-none focus:border-yellow-400 transition"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full mt-4 rounded-lg bg-yellow-400 px-5 py-3 font-semibold text-black hover:bg-yellow-300 disabled:opacity-50 transition flex items-center justify-center gap-2"
+              >
+                {loading ? <Loader className="h-5 w-5 animate-spin" /> : (editingTopicId ? "Update Topic" : "Create Topic")}
+              </button>
+            </form>
+          </div>
+
+          {/* Topics List */}
+          <div className="rounded-xl border border-gray-850 bg-gray-900/30 p-6 space-y-4">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-gray-400" />
+              All Topics
+            </h3>
+            <div className="divide-y divide-gray-800 overflow-y-auto max-h-[500px] pr-2">
+              {topics.length === 0 ? (
+                <p className="text-sm text-gray-500 py-4">No topics created yet.</p>
+              ) : (
+                topics.map((t) => (
+                  <div key={t.id} className="py-3 flex items-center justify-between gap-2">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-white">{t.name}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Order: {t.order}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEditTopic(t)}
+                        className="rounded-lg border border-blue-500/40 bg-blue-500/10 px-2 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-500/20"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTopic(t.id)}
+                        className="rounded-lg border border-red-500/40 bg-red-500/10 px-2 py-1 text-[11px] font-medium text-red-300 hover:bg-red-500/20"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "companies" && (
+        <div className="grid gap-8 lg:grid-cols-3">
+          {/* Company Form */}
+          <div className="lg:col-span-2 rounded-xl border border-gray-850 bg-gray-900/30 p-6 space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-yellow-400" />
+                {editingCompanyId ? "Edit Company" : "Create Company"}
+              </h3>
+              {editingCompanyId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingCompanyId(null);
+                    setCompanyName("");
+                  }}
+                  className="text-sm text-gray-400 hover:text-gray-300"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            <form onSubmit={handleCreateCompany} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Company Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Google, Amazon, Microsoft..."
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-2.5 text-white outline-none focus:border-yellow-400 transition"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full mt-4 rounded-lg bg-yellow-400 px-5 py-3 font-semibold text-black hover:bg-yellow-300 disabled:opacity-50 transition flex items-center justify-center gap-2"
+              >
+                {loading ? <Loader className="h-5 w-5 animate-spin" /> : (editingCompanyId ? "Update Company" : "Create Company")}
+              </button>
+            </form>
+          </div>
+
+          {/* Companies List */}
+          <div className="rounded-xl border border-gray-850 bg-gray-900/30 p-6 space-y-4">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-gray-400" />
+              All Companies
+            </h3>
+            <div className="divide-y divide-gray-800 overflow-y-auto max-h-[500px] pr-2">
+              {companies.length === 0 ? (
+                <p className="text-sm text-gray-500 py-4">No companies created yet.</p>
+              ) : (
+                companies.map((c) => (
+                  <div key={c.id} className="py-3 flex items-center justify-between gap-2">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-white">{c.name}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Slug: {c.slug}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEditCompany(c)}
+                        className="rounded-lg border border-blue-500/40 bg-blue-500/10 px-2 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-500/20"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCompany(c.id)}
+                        className="rounded-lg border border-red-500/40 bg-red-500/10 px-2 py-1 text-[11px] font-medium text-red-300 hover:bg-red-500/20"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
                 ))
@@ -1173,71 +1793,98 @@ const AdminPage = () => {
 
                 <div className="grid gap-4 md:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-1.5">Brute Force Approach</label>
+                    <label className="block text-sm font-medium text-gray-400 mb-1.5 flex items-center gap-2">
+                      <span className="inline-block px-2 py-1 rounded bg-red-500/20 text-red-300 text-xs font-semibold">Approach 1</span>
+                      Brute Force
+                    </label>
                     <textarea
-                      placeholder="Explain brute force idea..."
+                      placeholder="Explain brute force approach, intuition, and why it works..."
                       value={articleBruteForce}
                       onChange={(e) => setArticleBruteForce(e.target.value)}
-                      rows={4}
+                      rows={5}
                       className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-2.5 text-white outline-none focus:border-yellow-400 transition resize-none"
                     />
+                    <p className="text-xs text-gray-500 mt-2">Include explanation, algorithm outline, and complexity notes</p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-1.5">Better Approach</label>
+                    <label className="block text-sm font-medium text-gray-400 mb-1.5 flex items-center gap-2">
+                      <span className="inline-block px-2 py-1 rounded bg-yellow-500/20 text-yellow-300 text-xs font-semibold">Approach 2</span>
+                      Better Approach
+                    </label>
                     <textarea
-                      placeholder="Explain improved solution..."
+                      placeholder="Explain improved solution, optimization strategies, and why it's better..."
                       value={articleBetterApproach}
                       onChange={(e) => setArticleBetterApproach(e.target.value)}
-                      rows={4}
+                      rows={5}
                       className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-2.5 text-white outline-none focus:border-yellow-400 transition resize-none"
                     />
+                    <p className="text-xs text-gray-500 mt-2">Include explanation, algorithm outline, and complexity notes</p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-1.5">Optimal Approach</label>
+                    <label className="block text-sm font-medium text-gray-400 mb-1.5 flex items-center gap-2">
+                      <span className="inline-block px-2 py-1 rounded bg-green-500/20 text-green-300 text-xs font-semibold">Approach 3</span>
+                      Optimal Approach
+                    </label>
                     <textarea
-                      placeholder="Explain the most efficient solution..."
+                      placeholder="Explain the most efficient solution, key insights, and trade-offs..."
                       value={articleOptimalApproach}
                       onChange={(e) => setArticleOptimalApproach(e.target.value)}
-                      rows={4}
-                      className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-2.5 text-white outline-none focus:border-yellow-400 transition resize-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1.5">Algorithm Explanation</label>
-                  <textarea
-                    placeholder="Step by step details of the algorithm..."
-                    value={articleAlgorithm}
-                    onChange={(e) => setArticleAlgorithm(e.target.value)}
-                    rows={3}
-                    className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-2.5 text-white outline-none focus:border-yellow-400 transition resize-none"
-                  />
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-1.5">Solution Code</label>
-                    <textarea
-                      placeholder="Paste clean optimal code..."
-                      value={articleCode}
-                      onChange={(e) => setArticleCode(e.target.value)}
-                      rows={5}
-                      className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-2.5 text-white font-mono text-sm outline-none focus:border-yellow-400 transition resize-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-1.5">Complexity Analysis</label>
-                    <textarea
-                      placeholder="Time: O(N) / Space: O(1)..."
-                      value={articleComplexity}
-                      onChange={(e) => setArticleComplexity(e.target.value)}
                       rows={5}
                       className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-2.5 text-white outline-none focus:border-yellow-400 transition resize-none"
                     />
+                    <p className="text-xs text-gray-500 mt-2">Include explanation, algorithm outline, and complexity notes</p>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-800 pt-5">
+                  <h4 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                    <Settings className="h-4 w-4" />
+                    Detailed Algorithm & Code Breakdown
+                  </h4>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1.5">Algorithm Explanation (Step-by-Step)</label>
+                      <textarea
+                        placeholder="Provide detailed step-by-step algorithm explanation with diagrams references..."
+                        value={articleAlgorithm}
+                        onChange={(e) => setArticleAlgorithm(e.target.value)}
+                        rows={4}
+                        className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-2.5 text-white outline-none focus:border-yellow-400 transition resize-none"
+                      />
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1.5">💻 Solution Code (Professional Board)</label>
+                        <textarea
+                          placeholder="```python
+def solution(nums):
+    # Your optimal code here
+    pass
+```"
+                          value={articleCode}
+                          onChange={(e) => setArticleCode(e.target.value)}
+                          rows={6}
+                          className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-2.5 text-white font-mono text-sm outline-none focus:border-yellow-400 transition resize-none"
+                        />
+                        <p className="text-xs text-gray-500 mt-2">Format code with language identifier (python, java, cpp, etc.)</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1.5">⏱️ Complexity Analysis</label>
+                        <textarea
+                          placeholder="Time Complexity: O(n log n) - Explain why
+Space Complexity: O(n) - Explain trade-offs"
+                          value={articleComplexity}
+                          onChange={(e) => setArticleComplexity(e.target.value)}
+                          rows={6}
+                          className="w-full rounded-lg border border-gray-800 bg-gray-950 px-4 py-2.5 text-white outline-none focus:border-yellow-400 transition resize-none"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
